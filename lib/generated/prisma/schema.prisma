@@ -1,0 +1,40 @@
+// This is the Prisma schema file.
+// It defines the shape of our database tables.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// The Task model — one row per task in the database.
+model Task {
+  id           String    @id @default(cuid()) // Unique ID, auto-generated
+  title        String // The task text
+  description  String?
+  priority     String    @default("MEDIUM")
+  status       String    @default("To Do")
+  projectName  String    @default("Personal")
+  projectColor String    @default("bg-emerald-500")
+  dueDate      DateTime? // The due date for the task
+
+  createdAt DateTime @default(now()) // When was it created?
+  updatedAt DateTime @updatedAt // Auto-updated on every change
+
+  subtasks Subtask[]
+
+  @@map("tasks") // Maps to the "tasks" table in the database
+}
+
+model Subtask {
+  id        String  @id @default(cuid())
+  text      String
+  completed Boolean @default(false)
+  taskId    String
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("subtasks")
+}
