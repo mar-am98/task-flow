@@ -11,8 +11,8 @@ export function TaskList({ tasks }: TaskListProps) {
   if (tasks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-        <p className="text-lg font-medium">No tasks yet</p>
-        <p className="text-sm">Create your first task to get started.</p>
+        <p className="text-lg font-medium">No tasks match</p>
+        <p className="text-sm">Try another filter or create a new task.</p>
       </div>
     )
   }

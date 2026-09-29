@@ -4,6 +4,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { projectColors, defaultProjectColor } from "@/lib/projects";
+import { isTaskStatus } from "@/features/tasks/lib/task-status";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,7 +46,10 @@ export async function createTask(formData: FormData) {
   const priority = formData.get("priority")?.toString() || "MEDIUM";
   const status = formData.get("status")?.toString() || "To Do";
   const projectName = formData.get("projectName")?.toString() || "Personal";
-  const projectColor = formData.get("projectColor")?.toString() || "bg-emerald-500";
+  const projectColor =
+    formData.get("projectColor")?.toString() ||
+    projectColors[projectName] ||
+    defaultProjectColor;
   const dueDateRaw = formData.get("dueDate")?.toString();
   const dueDate = dueDateRaw ? new Date(dueDateRaw) : undefined;
 
@@ -100,7 +105,10 @@ export async function updateTask(id: string, formData: FormData) {
   const priority = formData.get("priority")?.toString() || "MEDIUM";
   const status = formData.get("status")?.toString() || "To Do";
   const projectName = formData.get("projectName")?.toString() || "Personal";
-  const projectColor = formData.get("projectColor")?.toString() || "bg-emerald-500";
+  const projectColor =
+    formData.get("projectColor")?.toString() ||
+    projectColors[projectName] ||
+    defaultProjectColor;
   const dueDateRaw = formData.get("dueDate")?.toString();
   const dueDate = dueDateRaw ? new Date(dueDateRaw) : null;
 
@@ -168,6 +176,29 @@ export async function toggleTaskStatus(id: string, currentStatus: string) {
 }
 
 // ─── TOGGLE SUBTASK ───────────────────────────────────────────────────────────
+
+/**
+ * Move a task to an explicit column — used by the kanban board when a card is
+ * dropped onto a different column.
+ */
+export async function updateTaskStatus(id: string, status: string) {
+  if (!isTaskStatus(status)) {
+    return { error: "Unknown task status." };
+  }
+
+  try {
+    await prisma.task.update({
+      where: { id },
+      data: { status },
+    });
+
+    revalidatePath("/");
+    return { error: null };
+  } catch (error) {
+    console.error("Failed to update task status:", error);
+    return { error: "Failed to update task status." };
+  }
+}
 
 /**
  * Toggle a single subtask's completed state.

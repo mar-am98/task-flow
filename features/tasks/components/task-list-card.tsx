@@ -7,6 +7,12 @@ import { TaskDialog } from "./task-dialog"
 import { projectColors, defaultProjectColor } from "@/lib/projects"
 import { toggleTaskStatus, deleteTask, toggleSubtask } from "../actions"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import {
+  formatDueDate,
+  isTaskOverdue,
+  normalizePriority,
+  priorityConfig,
+} from "@/features/tasks/lib/task-display"
 
 // Serialized Prisma Task shape (dates are strings after JSON serialization)
 export interface Task {
@@ -31,13 +37,6 @@ interface TaskListCardProps {
   task: Task
 }
 
-const priorityConfig: Record<string, { className: string; label: string }> = {
-  HIGH: { className: "bg-orange-500/10 text-orange-500", label: "HIGH" },
-  URGENT: { className: "bg-red-500/10 text-red-500", label: "URGENT" },
-  MEDIUM: { className: "bg-blue-500/10 text-blue-500", label: "MEDIUM" },
-  LOW: { className: "bg-slate-500/10 text-slate-400", label: "LOW" },
-}
-
 export function TaskListCard({ task }: TaskListCardProps) {
   const router = useRouter()
   const isCompleted = task.status === "Done"
@@ -47,17 +46,9 @@ export function TaskListCard({ task }: TaskListCardProps) {
   const totalSubtasks = task.subtasks?.length ?? 0
   const completedSubtasks = task.subtasks?.filter((st) => st.completed).length ?? 0
 
-  // Format due date for display
-  const dueDateStr = task.dueDate
-    ? new Date(task.dueDate).toISOString().split("T")[0]
-    : null
-
-  // Check if overdue (due date is in the past and not completed)
-  const isOverdue =
-    !isCompleted && task.dueDate && new Date(task.dueDate) < new Date()
-
-  // Map priority to uppercase for config lookup
-  const priorityKey = (task.priority || "MEDIUM").toUpperCase()
+  const dueDateStr = formatDueDate(task.dueDate)
+  const isOverdue = isTaskOverdue(task.dueDate, isCompleted)
+  const priorityKey = normalizePriority(task.priority)
 
   const handleToggleStatus = async () => {
     await toggleTaskStatus(task.id, task.status)

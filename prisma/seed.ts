@@ -1,12 +1,18 @@
+import dotenv from 'dotenv'
 import { PrismaClient } from '../lib/generated/prisma'
 import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
+
+dotenv.config()
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
 async function main() {
+  await prisma.subtask.deleteMany()
+  await prisma.task.deleteMany()
+  
   // Insert Task 1
   await prisma.task.create({
     data: {
@@ -25,7 +31,7 @@ async function main() {
     data: {
       title: "Design UI Wireframes for SaaS Dashboard",
       priority: "URGENT",
-      status: "To Do",
+      status: "In Progress",
       description: "Create initial Figma prototypes for dark and light mode navigation bars.",
       projectName: "Work & Office",
       projectColor: "bg-blue-500",

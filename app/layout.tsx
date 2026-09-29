@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Roboto } from "next/font/google";
+import { Suspense } from "react";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { getTasks } from "@/features/tasks/actions";
+import { computeSidebarStats } from "@/features/tasks/lib/task-query";
 
 const roboto = Roboto({subsets:['latin'],variable:'--font-sans'});
 
@@ -18,11 +21,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Todo List",
-  description: "A simple MVP built with Next.js, Prisma, and Supabase.",
+  title: "TaskFlow — Todo List",
+  description: "TaskFlow Pro Edition — tasks built with Next.js, Prisma, and Supabase.",
 };
 
-export default function RootLayout({ children }:{ children: React.ReactNode }) {
+export const dynamic = "force-dynamic";
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const { data: tasks } = await getTasks();
+  const serialized = JSON.parse(JSON.stringify(tasks));
+  const stats = computeSidebarStats(serialized);
+
   return (
     <html
       lang="en"
@@ -31,11 +40,15 @@ export default function RootLayout({ children }:{ children: React.ReactNode }) {
       <body className="min-h-full flex flex-col dark">
         <div className="mx-auto flex h-screen w-full max-w-[1600px] overflow-hidden bg-background font-sans selection:bg-primary/30">
           <div className="hidden md:block">
-            <Sidebar />
+            <Suspense fallback={<div className="w-64 h-screen border-r border-sidebar-border" />}>
+              <Sidebar stats={stats} />
+            </Suspense>
           </div>
           <div className="flex flex-1 flex-col overflow-hidden border-l border-border">
-            <Header />
-            <main className="flex-1 overflow-y-auto bg-background">
+            <Suspense fallback={<div className="h-20 border-b border-border" />}>
+              <Header />
+            </Suspense>
+            <main className="min-h-0 flex-1 overflow-hidden bg-background">
               {children}
             </main>
           </div>

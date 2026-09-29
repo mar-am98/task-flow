@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useRef, useState, useTransition } from "react"
+import React, { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { CalendarIcon, X } from "lucide-react"
 
@@ -24,8 +24,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { createTask, updateTask } from "../actions"
 import { projectNames } from "@/lib/projects"
+import { normalizePriority } from "@/features/tasks/lib/task-display"
 
-// Serialized Task shape — used to pre-fill the form in edit mode
 interface TaskData {
   id: string
   title: string
@@ -36,6 +36,8 @@ interface TaskData {
   dueDate?: string | null
   subtasks: { id: string; text: string; completed: boolean }[]
 }
+
+const statusOptions = ["To Do", "In Progress", "Done"] as const
 
 export function TaskDialog({
   children,
@@ -53,40 +55,56 @@ export function TaskDialog({
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  // Subtask list — initialized from existing task data when editing
-  const [subtasks, setSubtasks] = useState<{ id: string; text: string; completed: boolean }[]>(
-    () => task?.subtasks?.map((st) => ({ ...st })) ?? []
-  )
+  const [subtasks, setSubtasks] = useState<{ id: string; text: string; completed: boolean }[]>([])
+  const [projectName, setProjectName] = useState("Personal")
+  const [priority, setPriority] = useState("MEDIUM")
+  const [status, setStatus] = useState<string>("To Do")
+  const [formSeed, setFormSeed] = useState(0)
 
-  // Pre-fill values for edit mode
-  const defaultPriority = task?.priority || "MEDIUM"
-  const defaultStatus = task?.status || "To Do"
-  const defaultProject = task?.projectName || "Personal"
-  const defaultDueDate = task?.dueDate
-    ? new Date(task.dueDate).toISOString().split("T")[0]
-    : ""
+  useEffect(() => {
+    if (!open) return
+
+    setError(null)
+    if (task) {
+      setSubtasks(task.subtasks.map((st) => ({ ...st })))
+      setProjectName(task.projectName)
+      setPriority(normalizePriority(task.priority))
+      setStatus(task.status)
+    } else {
+      setSubtasks([])
+      setProjectName("Personal")
+      setPriority("MEDIUM")
+      setStatus("To Do")
+    }
+    setFormSeed((n) => n + 1)
+  }, [open, task])
 
   const addSubtask = () => {
-    setSubtasks([...subtasks, { id: Date.now().toString(), text: "", completed: false }])
+    setSubtasks((prev) => [
+      ...prev,
+      { id: `${Date.now()}-${prev.length}`, text: "", completed: false },
+    ])
   }
 
   const removeSubtask = (id: string) => {
-    setSubtasks(subtasks.filter((st) => st.id !== id))
+    setSubtasks((prev) => prev.filter((st) => st.id !== id))
   }
 
   const updateSubtaskText = (id: string, text: string) => {
-    setSubtasks(subtasks.map((st) => (st.id === id ? { ...st, text } : st)))
+    setSubtasks((prev) => prev.map((st) => (st.id === id ? { ...st, text } : st)))
   }
 
   const toggleSubtaskCompleted = (id: string) => {
-    setSubtasks(
-      subtasks.map((st) => (st.id === id ? { ...st, completed: !st.completed } : st))
+    setSubtasks((prev) =>
+      prev.map((st) => (st.id === id ? { ...st, completed: !st.completed } : st))
     )
   }
 
   const handleSubmit = async (formData: FormData) => {
     setError(null)
-    // Inject subtasks as JSON into the form data
+    formData.set("projectName", projectName)
+    formData.set("priority", priority)
+    formData.set("status", status)
     formData.set("subtasks", JSON.stringify(subtasks))
 
     startTransition(async () => {
@@ -105,47 +123,58 @@ export function TaskDialog({
     })
   }
 
+  const defaultDueDate = task?.dueDate
+    ? new Date(task.dueDate).toISOString().split("T")[0]
+    : ""
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={children} />
-      <DialogContent className="sm:max-w-150 bg-background border-border">
-        <DialogHeader>
-          <DialogTitle className="text-foreground">{title}</DialogTitle>
+      <DialogContent className="gap-0 border-border bg-card p-0 sm:max-w-xl shadow-2xl">
+        <DialogHeader className="border-b border-border px-6 py-5">
+          <DialogTitle className="text-lg font-semibold text-foreground">{title}</DialogTitle>
         </DialogHeader>
 
-        <form ref={formRef} action={handleSubmit} className="grid gap-6 py-4">
+        <form
+          key={formSeed}
+          ref={formRef}
+          action={handleSubmit}
+          className="grid max-h-[min(80vh,720px)] gap-5 overflow-y-auto px-6 py-5"
+        >
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-muted-foreground uppercase">
+            <label htmlFor="task-title" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Task Title *
             </label>
             <Input
+              id="task-title"
               name="title"
               required
               placeholder="e.g., Finalize Q3 Marketing Report"
-              className="bg-muted/50 border-border"
-              defaultValue={task?.title}
+              className="h-11 border-border bg-muted/50"
+              defaultValue={task?.title ?? ""}
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-muted-foreground uppercase">
+            <label htmlFor="task-description" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Description / Notes
             </label>
             <Textarea
+              id="task-description"
               name="description"
               placeholder="Add additional details or links..."
-              className="min-h-25 bg-muted/50 border-border"
+              className="min-h-24 resize-none border-border bg-muted/50"
               defaultValue={task?.description ?? ""}
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Project / Tag
-              </label>
-              <Select name="projectName" defaultValue={defaultProject}>
-                <SelectTrigger className="bg-muted/50 border-border">
+              </span>
+              <Select value={projectName} onValueChange={(value) => value && setProjectName(value)}>
+                <SelectTrigger className="h-11 w-full border-border bg-muted/50">
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
                 <SelectContent>
@@ -159,11 +188,11 @@ export function TaskDialog({
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Priority
-              </label>
-              <Select name="priority" defaultValue={defaultPriority}>
-                <SelectTrigger className="bg-muted/50 border-border">
+              </span>
+              <Select value={priority} onValueChange={(value) => value && setPriority(value)}>
+                <SelectTrigger className="h-11 w-full border-border bg-muted/50">
                   <SelectValue placeholder="Select priority" />
                 </SelectTrigger>
                 <SelectContent>
@@ -176,32 +205,35 @@ export function TaskDialog({
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">
+              <label htmlFor="task-due-date" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Due Date
               </label>
               <div className="relative">
                 <Input
+                  id="task-due-date"
                   name="dueDate"
                   type="date"
-                  className="bg-muted/50 border-border pl-10 block w-full"
+                  className="h-11 w-full border-border bg-muted/50 pl-10"
                   defaultValue={defaultDueDate}
                 />
-                <CalendarIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <CalendarIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Status
-              </label>
-              <Select name="status" defaultValue={defaultStatus}>
-                <SelectTrigger className="bg-muted/50 border-border">
+              </span>
+              <Select value={status} onValueChange={(value) => value && setStatus(value)}>
+                <SelectTrigger className="h-11 w-full border-border bg-muted/50">
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="To Do">To Do</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Done">Done</SelectItem>
+                  {statusOptions.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -209,14 +241,14 @@ export function TaskDialog({
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Subtasks Checklist
-              </label>
+              </span>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-8 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 text-xs font-medium"
+                className="h-8 text-xs font-medium text-blue-500 hover:bg-blue-500/10 hover:text-blue-400"
                 onClick={addSubtask}
               >
                 + Add Subtask
@@ -224,10 +256,15 @@ export function TaskDialog({
             </div>
 
             <div className="space-y-2">
+              {subtasks.length === 0 && (
+                <p className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
+                  No subtasks yet. Add steps to break down this task.
+                </p>
+              )}
               {subtasks.map((st) => (
                 <div
                   key={st.id}
-                  className="flex items-center gap-3 bg-muted/30 p-2 rounded-lg border border-border"
+                  className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-2"
                 >
                   <Checkbox
                     checked={st.completed}
@@ -237,13 +274,13 @@ export function TaskDialog({
                     value={st.text}
                     onChange={(e) => updateSubtaskText(st.id, e.target.value)}
                     placeholder="Subtask details..."
-                    className="h-8 bg-transparent border-none focus-visible:ring-0 px-0"
+                    className="h-8 flex-1 border-none bg-transparent px-0 focus-visible:ring-0"
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
                     onClick={() => removeSubtask(st.id)}
                   >
                     <X className="h-4 w-4" />
@@ -253,11 +290,9 @@ export function TaskDialog({
             </div>
           </div>
 
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <div className="flex justify-end gap-3 mt-4">
+          <div className="flex justify-end gap-3 border-t border-border pt-4">
             <Button
               type="button"
               variant="ghost"
@@ -269,7 +304,7 @@ export function TaskDialog({
             <Button
               type="submit"
               disabled={isPending}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+              className="rounded-lg bg-blue-600 px-6 text-white hover:bg-blue-700"
             >
               {isPending ? "Saving..." : isEditing ? "Update Task" : "Save Task"}
             </Button>
